@@ -12,11 +12,13 @@
 
 import { Route as rootRoute } from './routes/__root'
 import { Route as SignupImport } from './routes/signup'
+import { Route as SignalDataImport } from './routes/signal-data'
 import { Route as ResetPasswordImport } from './routes/reset-password'
 import { Route as RecoverPasswordImport } from './routes/recover-password'
 import { Route as LoginImport } from './routes/login'
 import { Route as LayoutImport } from './routes/_layout'
 import { Route as LayoutIndexImport } from './routes/_layout/index'
+import { Route as LayoutSignalDataImport } from './routes/_layout/signal-data'
 import { Route as LayoutSettingsImport } from './routes/_layout/settings'
 import { Route as LayoutItemsImport } from './routes/_layout/items'
 import { Route as LayoutAdminImport } from './routes/_layout/admin'
@@ -25,6 +27,11 @@ import { Route as LayoutAdminImport } from './routes/_layout/admin'
 
 const SignupRoute = SignupImport.update({
   path: '/signup',
+  getParentRoute: () => rootRoute,
+} as any)
+
+const SignalDataRoute = SignalDataImport.update({
+  path: '/signal-data',
   getParentRoute: () => rootRoute,
 } as any)
 
@@ -50,6 +57,11 @@ const LayoutRoute = LayoutImport.update({
 
 const LayoutIndexRoute = LayoutIndexImport.update({
   path: '/',
+  getParentRoute: () => LayoutRoute,
+} as any)
+
+const LayoutSignalDataRoute = LayoutSignalDataImport.update({
+  path: '/signal-data',
   getParentRoute: () => LayoutRoute,
 } as any)
 
@@ -88,6 +100,10 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ResetPasswordImport
       parentRoute: typeof rootRoute
     }
+    '/signal-data': {
+      preLoaderRoute: typeof SignalDataImport
+      parentRoute: typeof rootRoute
+    }
     '/signup': {
       preLoaderRoute: typeof SignupImport
       parentRoute: typeof rootRoute
@@ -104,6 +120,10 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LayoutSettingsImport
       parentRoute: typeof LayoutImport
     }
+    '/_layout/signal-data': {
+      preLoaderRoute: typeof LayoutSignalDataImport
+      parentRoute: typeof LayoutImport
+    }
     '/_layout/': {
       preLoaderRoute: typeof LayoutIndexImport
       parentRoute: typeof LayoutImport
@@ -118,11 +138,13 @@ export const routeTree = rootRoute.addChildren([
     LayoutAdminRoute,
     LayoutItemsRoute,
     LayoutSettingsRoute,
+    LayoutSignalDataRoute,
     LayoutIndexRoute,
   ]),
   LoginRoute,
   RecoverPasswordRoute,
   ResetPasswordRoute,
+  SignalDataRoute,
   SignupRoute,
 ])
 
