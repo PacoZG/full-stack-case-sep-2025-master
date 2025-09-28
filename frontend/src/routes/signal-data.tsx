@@ -1,8 +1,15 @@
-import { useState, useEffect } from 'react';
-import { createFileRoute } from '@tanstack/react-router';
+import React, {useState} from 'react';
+import {createFileRoute} from '@tanstack/react-router';
 import axios from 'axios';
-import { Container, Input as ChakraInput, Table, Text, Box } from '@chakra-ui/react';
-import { Button } from "../components/ui/button";
+import {
+  Box,
+  Container,
+  Input as ChakraInput,
+  Table,
+  Text
+} from '@chakra-ui/react';
+import {Button} from "../components/ui/button";
+import {useMutation, useQuery} from '@tanstack/react-query';
 
 // Define the route for this component
 export const Route = createFileRoute("/signal-data")({
@@ -19,32 +26,27 @@ interface UploadedFile {
 
 function SignalData() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [uploadStatus, setUploadStatus] = useState<string>('');
-  const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
-  const [isLoading, setIsLoading] = useState<boolean>(false);
-  const [error, setError] = useState<string | null>(null);
-  const [uploadProgress, setUploadProgress] = useState<number>(0);
   const [fileDetails, setFileDetails] = useState<UploadedFile | null>(null);
   const [showModal, setShowModal] = useState(false);
+  const [localError, setLocalError] = useState<string | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<number>(0);
+  const [uploadStatus, setUploadStatus] = useState<string>('');
 
   const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
-  useEffect(() => {
-    void fetchUploadedFiles();
-  }, []);
-
-  const fetchUploadedFiles = async () => {
-    setIsLoading(true);
-    setError(null);
-    try {
+  // --- useQuery for uploaded files ---
+  const {
+    data: uploadedFiles = [],
+    isLoading,
+    error: fetchError,
+    refetch: refetchUploadedFiles,
+  } = useQuery({
+    queryKey: ['uploadedFiles'],
+    queryFn: async () => {
       const response = await axios.get<UploadedFile[]>(`${API_BASE_URL}/api/v1/uploaded-files`);
-      setUploadedFiles(response.data);
-    } catch (err: any) {
-      setError('Failed to fetch uploaded files.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
+      return response.data;
+    },
+  });
 
   const fetchFileDetails = async (fileId: string) => {
     try {
@@ -52,7 +54,7 @@ function SignalData() {
       setFileDetails(response.data);
       setShowModal(true);
     } catch (err: any) {
-      setError('Failed to fetch file details.');
+      setLocalError('Failed to fetch file details.');
     }
   };
 
@@ -60,7 +62,7 @@ function SignalData() {
     if (event.target.files && event.target.files[0]) {
       setSelectedFile(event.target.files[0]);
       setUploadStatus('');
-      setError(null);
+      setLocalError(null);
     } else {
       setSelectedFile(null);
     }
@@ -70,18 +72,14 @@ function SignalData() {
     void fetchFileDetails(fileId);
   };
 
-  const handleUpload = async () => {
-    if (!selectedFile) {
-      setUploadStatus('Please select a file first.');
-      return;
-    }
-    setIsLoading(true);
-    setUploadStatus('Uploading...');
-    setError(null);
-    setUploadProgress(0);
-    const formData = new FormData();
-    formData.append('file', selectedFile);
-    try {
+  // --- useMutation for upload ---
+  const uploadMutation = useMutation({
+    mutationFn: async (file: File) => {
+      setUploadProgress(0);
+      setUploadStatus('Uploading...');
+      setLocalError(null);
+      const formData = new FormData();
+      formData.append('file', file);
       const response = await axios.post<UploadedFile>(
         `${API_BASE_URL}/api/v1/upload-signal-data`,
         formData,
@@ -94,16 +92,29 @@ function SignalData() {
           },
         }
       );
-      setUploadStatus(`Upload successful! File ID: ${response.data.id}, Status: ${response.data.status}`);
+      return response.data;
+    },
+    onSuccess: (data) => {
+      setUploadStatus(`Upload successful! File ID: ${data.id}, Status: ${data.status}`);
       setSelectedFile(null);
       setUploadProgress(0);
-      void fetchUploadedFiles();
-    } catch (err: any) {
+      refetchUploadedFiles();
+    },
+    onError: (err: any) => {
       setUploadProgress(0);
-      setError(`Upload failed: ${err.response?.data?.detail || err.message || 'Unknown error'}`);
-    } finally {
-      setIsLoading(false);
+      setLocalError(`Upload failed: ${err.response?.data?.detail || err.message || 'Unknown error'}`);
+    },
+    onSettled: () => {
+      setUploadProgress(0);
+    },
+  });
+
+  const handleUpload = async () => {
+    if (!selectedFile) {
+      setUploadStatus('Please select a file first.');
+      return;
     }
+    uploadMutation.mutate(selectedFile);
   };
 
   return (
@@ -124,10 +135,10 @@ function SignalData() {
               border="none"
               _focus={{ boxShadow: 'none' }}
             />
-            <Button onClick={handleUpload} loading={isLoading} disabled={!selectedFile} colorScheme="teal">
+            <Button onClick={handleUpload} loading={uploadMutation.isLoading} disabled={!selectedFile} colorScheme="teal">
               Upload File
             </Button>
-            <Button onClick={fetchUploadedFiles} disabled={isLoading} colorScheme="gray" variant="outline">
+            <Button onClick={() => refetchUploadedFiles()} disabled={uploadMutation.isLoading} colorScheme="gray" variant="outline">
               Refresh List
             </Button>
           </div>
@@ -137,9 +148,9 @@ function SignalData() {
             </Box>
           )}
           {uploadStatus && <Text mt={2} color="green.500">{uploadStatus}</Text>}
-          {error && (
+          {(localError || uploadMutation.error || fetchError) && (
             <div style={{ background: '#FED7D7', color: '#C53030', padding: 8, borderRadius: 4, marginTop: 16 }}>
-              {error}
+              {localError || (uploadMutation.error as any)?.message || (fetchError as any)?.message}
             </div>
           )}
         </Box>
