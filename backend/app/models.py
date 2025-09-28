@@ -1,6 +1,10 @@
 import uuid
+from datetime import datetime
+from typing import List, Optional
 
 from pydantic import EmailStr
+from sqlalchemy import JSON, Column, DateTime, String
+from sqlalchemy.dialects.postgresql import ARRAY, FLOAT
 from sqlmodel import Field, Relationship, SQLModel
 
 
@@ -111,3 +115,35 @@ class TokenPayload(SQLModel):
 class NewPassword(SQLModel):
     token: str
     new_password: str = Field(min_length=8, max_length=40)
+
+
+# New models for signal data ingestion
+class UploadedFile(SQLModel, table=True):
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    filename: str = Field(max_length=255)
+    upload_timestamp: datetime = Field(default_factory=datetime.utcnow, sa_column=Column(DateTime(timezone=True), nullable=False))
+    status: str = Field(default="pending", max_length=50)  # e.g., 'pending', 'processing', 'completed', 'failed'
+    file_type: str = Field(max_length=50) # 'csv' or 'binary'
+
+    signal_measurements: List["SignalMeasurement"] = Relationship(back_populates="uploaded_file")
+
+
+class SignalMeasurement(SQLModel, table=True):
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    uploaded_file_id: uuid.UUID = Field(foreign_key="uploadedfile.id", nullable=False)
+
+    facility_name: str = Field(max_length=255)
+    facility_section_name: str = Field(max_length=255)
+    machine_name: str = Field(max_length=255)
+    measurement_point_name: str = Field(max_length=255)
+    measured_at: datetime = Field(sa_column=Column(DateTime(timezone=True), nullable=False))
+    rotating_speed: float
+    signal_unit: str = Field(max_length=50)
+    sampling_rate_hz: float
+
+    # Using PostgreSQL ARRAY type for the signal data
+    signal: List[float] = Field(sa_column=Column(ARRAY(FLOAT)))
+
+    uploaded_file: UploadedFile = Relationship(back_populates="signal_measurements")
+
+
